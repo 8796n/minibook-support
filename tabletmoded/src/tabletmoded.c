@@ -14,6 +14,8 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include <libevdev/libevdev.h>
+
 #include "debug.h"
 #include "device.h"
 #include "server.h"
@@ -21,15 +23,24 @@
 
 #define VERSION "tabletmoded 1.1.0"
 
-#define KEYBOARDD_SOCK "/var/run/keyboardd.sock"
-#define mouseD_SOCK "/var/run/moused.sock"
-
 #define TABLETMODED_SOCK "/var/run/tabletmoded.sock"
 
 // Accelerometer
 // For detect the tablet mode
 #define ACCEL_SCREEN_PATH "/sys/bus/iio/devices/iio:device0/"
 #define ACCEL_BASE_PATH "/sys/bus/iio/devices/iio:device1/"
+
+// Mouse
+#define MINIBOOK_MOUSE_DEVICE "/dev/input/by-id/usb-0603_0003-event-mouse"
+#define MINIBOOKX_MOUSE_DEVICE                                                 \
+    "/dev/input/by-path/"                                                      \
+    "pci-0000:00:15.3-platform-i2c_designware.3-event-mouse"
+// Keyboard
+#define KEYBOARD_DEVICE "/dev/input/by-path/platform-i8042-serio-0-event-kbd"
+
+int mousefd = -1, keyboardfd = -1;
+struct libevdev *mouse = NULL;
+struct libevdev *keyboard = NULL;
 
 server_t *server_addr = NULL;
 
@@ -158,13 +169,19 @@ int send_command(const char *path, uint8_t cmd, uint8_t data) {
 }
 
 void set_tabletmode(int value) {
-    if (send_command(KEYBOARDD_SOCK, 0, !value) == -1) {
-        perror("Cannot send the command to the keyboardd");
-    }
-    if (send_command(mouseD_SOCK, 0, !value) == -1) {
-        perror("Cannot send the command to the moused");
-    }
     is_enabled_tabletmode = value;
+    int ret=0;
+    if (value == 1){
+        ret = libevdev_grab(mouse, LIBEVDEV_GRAB);
+        debug_printf("Mouse libevdev_grab LIBEVDEV_GRAB: %d\n", ret);
+        ret = libevdev_grab(keyboard, LIBEVDEV_GRAB);
+        debug_printf("Keyboard libevdev_grab LIBEVDEV_GRAB: %d\n", ret);
+    }else{
+        ret = libevdev_grab(mouse, LIBEVDEV_UNGRAB);
+        debug_printf("Mouse libevdev_grab LIBEVDEV_UNGRAB: %d\n", ret);
+        ret = libevdev_grab(keyboard, LIBEVDEV_UNGRAB);
+        debug_printf("Keyboard libevdev_grab LIBEVDEV_UNGRAB: %d\n", ret);
+    }
     emit(output, EV_SW, SW_TABLET_MODE, value);
     emit(output, EV_SYN, SYN_REPORT, 0);
 }
@@ -189,6 +206,8 @@ uint8_t server_callback(uint8_t type, uint8_t data) {
 int main(int argc, char *argv[]) {
     // Parse the command line arguments
     parse_args(argc, argv);
+
+	int rc;
 
     output = new_device();
     if (output == -1) {
@@ -261,7 +280,30 @@ int main(int argc, char *argv[]) {
             recovery_device();
             return (EXIT_FAILURE);
         }
+        mousefd = open(MINIBOOKX_MOUSE_DEVICE, O_RDWR);
+    } else {
+        mousefd = open(MINIBOOK_MOUSE_DEVICE, O_RDWR);
     }
+	if (mousefd < 0) {
+		perror("Failed to open Mouse device");
+		return (EXIT_FAILURE);
+	}
+	rc = libevdev_new_from_fd(mousefd, &mouse);
+	if (rc < 0) {
+		perror("Failed to init libevdev");
+		return (EXIT_FAILURE);
+	}
+    // Keybord
+    keyboardfd = open(KEYBOARD_DEVICE, O_RDWR);
+    if (keyboardfd < 0) {
+        perror("Failed to open Keyboard device");
+        return (EXIT_FAILURE);
+    }
+	rc = libevdev_new_from_fd(keyboardfd, &keyboard);
+	if (rc < 0) {
+		perror("Failed to init libevdev");
+		return (EXIT_FAILURE);
+	}
 
     // Accelerometer scale
     float accel_screen_scale = 0.0f;

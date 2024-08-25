@@ -1,4 +1,4 @@
-TARGETS = common moused keyboardd tabletmoded
+TARGETS = common tabletmoded
 
 .PHONY: all clean install uninstall $(TARGETS)
 

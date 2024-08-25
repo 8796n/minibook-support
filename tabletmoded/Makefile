@@ -5,8 +5,8 @@ ifeq "$(shell getconf LONG_BIT)" "64"
 else
   LDFLAGS = -lm
 endif
-LIBS      = ../common/bin/libcommon.a
-INCLUDE   = -I./include -I../common/include
+LIBS      = ../common/bin/libcommon.a $(shell pkg-config --libs libevdev)
+INCLUDE   = -I./include -I../common/include $(shell pkg-config --cflags libevdev)
 TARGET    = ./bin/$(shell basename `readlink -f .`) ../common/bin/$(shell basename `readlink -f ../common`)
 SRCDIR    = ./src
 ifeq "$(strip $(SRCDIR))" ""
