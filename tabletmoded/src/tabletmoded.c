@@ -36,7 +36,9 @@
     "/dev/input/by-path/"                                                      \
     "pci-0000:00:15.3-platform-i2c_designware.3-event-mouse"
 // Keyboard
-#define KEYBOARD_DEVICE "/dev/input/by-path/platform-i8042-serio-0-event-kbd"
+#define KEYBOARD_DEVICE "/dev/input/by-path/platform-i8042-serio-0-event-kbd" 
+
+#define LID_STATE_PATH "/proc/acpi/button/lid/LID0/state"
 
 int mousefd = -1, keyboardfd = -1;
 struct libevdev *mouse = NULL;
@@ -292,9 +294,9 @@ int main(int argc, char *argv[]) {
             recovery_device();
             return (EXIT_FAILURE);
         }
-        mousefd = open(MINIBOOKX_MOUSE_DEVICE, O_RDWR);
+        mousefd = open(MINIBOOKX_MOUSE_DEVICE, O_RDONLY);
     } else {
-        mousefd = open(MINIBOOK_MOUSE_DEVICE, O_RDWR);
+        mousefd = open(MINIBOOK_MOUSE_DEVICE, O_RDONLY);
     }
 	if (mousefd < 0) {
 		perror("Failed to open Mouse device");
@@ -306,7 +308,7 @@ int main(int argc, char *argv[]) {
 		return (EXIT_FAILURE);
 	}
     // Keybord
-    keyboardfd = open(KEYBOARD_DEVICE, O_RDWR);
+    keyboardfd = open(KEYBOARD_DEVICE, O_RDONLY);
     if (keyboardfd < 0) {
         perror("Failed to open Keyboard device");
         return (EXIT_FAILURE);
@@ -351,6 +353,27 @@ int main(int argc, char *argv[]) {
     while (1) {
         // 無効化されている場合はなにもしない
         if (is_enabled_detection == 0) {
+            sleep(1);
+            continue;
+        }
+
+        // 画面が閉じている場合はなにもしない
+        FILE *fp_lid_status = fopen(LID_STATE_PATH, "r");
+        if (fp_lid_status == NULL) {
+            perror("Cannot open Lid status");
+            recovery_device();
+            return (EXIT_FAILURE);
+        }
+        char lid_status[256];
+        if (fgets(lid_status, sizeof(lid_status), fp_lid_status) == NULL){
+            perror("Cannot read Lid status");
+            fclose(fp_lid_status);
+            recovery_device();
+            return (EXIT_FAILURE);
+        }
+        fclose(fp_lid_status);
+        if (strstr(lid_status, "closed") != NULL){
+            set_tabletmode(0);
             sleep(1);
             continue;
         }
