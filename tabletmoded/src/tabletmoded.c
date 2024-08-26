@@ -54,10 +54,19 @@ void recovery_device() {
         ioctl(output, UI_DEV_DESTROY);
         close(output);
     }
+     if (mousefd != -1) {
+        libevdev_grab(mouse, LIBEVDEV_UNGRAB);
+        close(mousefd);
+    }
+    if (keyboardfd != -1) {
+         libevdev_grab(keyboard, LIBEVDEV_UNGRAB);
+        close(keyboardfd);
+    }
+   
 }
 
 // Signal handler
-void sigint_handler(int signum) {
+void sigint_handler() {
     if (server_addr != NULL) {
         stop_server(server_addr);
     }
@@ -170,17 +179,20 @@ int send_command(const char *path, uint8_t cmd, uint8_t data) {
 
 void set_tabletmode(int value) {
     is_enabled_tabletmode = value;
-    int ret=0;
     if (value == 1){
-        ret = libevdev_grab(mouse, LIBEVDEV_GRAB);
-        debug_printf("Mouse libevdev_grab LIBEVDEV_GRAB: %d\n", ret);
-        ret = libevdev_grab(keyboard, LIBEVDEV_GRAB);
-        debug_printf("Keyboard libevdev_grab LIBEVDEV_GRAB: %d\n", ret);
+        if(libevdev_grab(mouse, LIBEVDEV_GRAB) != 0){
+            perror("Cannot grab Mouse");
+        }
+        if(libevdev_grab(keyboard, LIBEVDEV_GRAB) != 0){
+            perror("Cannot grab Keyboard");
+        }
     }else{
-        ret = libevdev_grab(mouse, LIBEVDEV_UNGRAB);
-        debug_printf("Mouse libevdev_grab LIBEVDEV_UNGRAB: %d\n", ret);
-        ret = libevdev_grab(keyboard, LIBEVDEV_UNGRAB);
-        debug_printf("Keyboard libevdev_grab LIBEVDEV_UNGRAB: %d\n", ret);
+        if(libevdev_grab(mouse, LIBEVDEV_UNGRAB) != 0){
+            perror("Cannot ungrab Mouse");
+        }
+        if(libevdev_grab(keyboard, LIBEVDEV_UNGRAB) != 0){
+            perror("Cannot ungrab Keyboard");
+        }
     }
     emit(output, EV_SW, SW_TABLET_MODE, value);
     emit(output, EV_SYN, SYN_REPORT, 0);
@@ -449,5 +461,10 @@ int main(int argc, char *argv[]) {
     // Never reach here...
     ioctl(output, UI_DEV_DESTROY);
     close(output);
+    libevdev_grab(mouse, LIBEVDEV_UNGRAB);
+    close(mousefd);
+    libevdev_grab(keyboard, LIBEVDEV_UNGRAB);
+    close(keyboardfd);
+
     return (EXIT_SUCCESS);
 }
