@@ -3,7 +3,7 @@ Description=Daemon for the tabletmode of the MiniBook
 ConditionPathExists=/usr/bin/
 
 Requires=sysinit.target
-After=sysinit.target basic.target
+After=sysinit.target basic.target iio-sensor-proxy.service
 
 [Service]
 
